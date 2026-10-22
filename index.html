@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>早押しクイズバトル</title>
+<style>
+:root{--bg:#f4f5fb;--sf:#fff;--tx:#1d2033;--mu:#6b7090;--ac:#5b5bf0;--ok:#16a34a;--ng:#dc2626;--bd:#dfe2f0;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14152a;--sf:#1f2140;--tx:#eef0ff;--mu:#9aa0c8;--ac:#8484ff;--bd:#33366a}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;max-width:520px;margin:0 auto;padding:14px}
+h1{font-size:22px;margin:6px 0 12px;text-align:center}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+input[type=text],input[type=password]{width:100%;font-size:18px;padding:12px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);margin:5px 0}
+button{font-size:16px;padding:12px 16px;border:0;border-radius:10px;background:var(--ac);color:#fff;font-weight:700;width:100%;margin-top:6px}
+button.sub{background:var(--mu)}button:disabled{opacity:.4}
+#buzz{font-size:26px;padding:26px;background:var(--ng)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mu{color:var(--mu);font-size:13px}
+#qText{font-size:22px;line-height:1.6;min-height:110px;word-break:break-all}
+#timer{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+.pl{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd)}
+.pl.me{font-weight:800}.pl.lead::after{content:" 👑"}
+.err{color:var(--ng);font-size:14px;min-height:18px}
+.hint{padding:4px 0}
+ul{padding-left:20px;line-height:1.7}
+</style>
+</head>
+<body>
+<h1>⚡ 早押しクイズバトル</h1>
+<div class="err" id="err"></div>
+
+<div id="sEntry" class="card">
+ <input type="text" id="nm" placeholder="あなたの名前" maxlength="8">
+ <input type="text" id="ln" placeholder="ロビー名" maxlength="20">
+ <input type="password" id="pw" placeholder="パスワード">
+ <button id="bCreate">ロビーを作成</button>
+ <button id="bJoin" class="sub">ロビーに参加</button>
+</div>
+
+<div id="sLobby" class="card" hidden>
+ <div class="mu">ロビー：<b id="lName"></b>（最大4人）</div>
+ <div id="lList"></div>
+ <div id="gen" hidden><div class="mu" id="gTx"></div><div style="height:14px;background:var(--bd);border-radius:7px;overflow:hidden;margin:6px 0"><div id="gBar" style="height:100%;width:0;background:var(--ac);transition:width .3s"></div></div></div>
+ <button id="bStart">ゲーム開始（ホストのみ）</button>
+ <div class="mu" id="lMsg"></div>
+</div>
+
+<div id="sRules" class="card" hidden>
+ <h2 style="margin:0 0 8px">ルール説明</h2>
+ <ul>
+  <li>全30問、早押しで回答。最も得点の高い人が優勝！</li>
+  <li><b>最後の問題は3点問題です！</b>（他は1点）</li>
+  <li>問題は1秒に約5文字ずつ表示。問題は30秒（連想クイズは50秒）。誰かが間違えても30秒はリセットされず、間違えるたびに+5秒。</li>
+  <li>ボタンを押したら文字入力で回答（10秒／漢字が多い答えは15秒）。</li>
+  <li>1度間違えるとその問題は回答不可。文字表示は最初からやり直し。全員間違えたら次の問題へ。</li>
+  <li>1位と2位の差が5点以上のとき、1位は最初の3秒間ボタンを押せません。</li>
+  <li>多少の表記ゆれ（お寿司＝寿司など）は正解。誤字は不正解。</li>
+  <li>連想クイズは10秒ごとにヒントが1つずつ追加されます。</li>
+ </ul>
+ <div class="mu" id="rMsg"></div>
+</div>
+
+<div id="sGame" hidden>
+ <div class="card">
+  <div class="row"><span id="qHead"></span><span id="timer"></span></div>
+  <div id="qText"></div>
+  <div id="status" class="mu"></div>
+ </div>
+ <button id="buzz">早押し！</button>
+ <div id="ansBox" class="card" hidden>
+  <div class="mu">答えを入力して送信（Enterでも送信）</div>
+  <input type="text" id="ansIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send">
+  <button id="bAns">回答する</button>
+ </div>
+ <div class="card" id="board"></div>
+</div>
+
+<div id="sEnd" class="card" hidden>
+ <h2 style="margin:0 0 8px">🏆 結果発表</h2>
+ <div id="rank"></div>
+</div>
+
+<button id="bgmBtn" class="sub" style="margin-top:4px">🎵 BGM ON/OFF</button>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="questions.js"></script>
+<script src="questions2.js" onerror=""></script>
+<script src="questions3.js" onerror=""></script>
+<script src="questions4.js" onerror=""></script>
+<script>
+const $=id=>document.getElementById(id);
+const BANK=`日本史|江戸幕府を開いた初代将軍は誰？|徳川家康,家康
+日本史|1600年、徳川家康が勝利した天下分け目の戦いは？|関ヶ原の戦い,関ヶ原
+日本史|大化の改新を中大兄皇子とともに進めた人物は？|中臣鎌足,藤原鎌足,鎌足|1
+世界史|皇帝に即位したフランスの軍人といえば？|ナポレオン,ナポレオン・ボナパルト
+世界史|1492年に新大陸へ到達した航海者は？|コロンブス,クリストファー・コロンブス
+世界史|ローマ帝国の初代皇帝は？|アウグストゥス,オクタウィアヌス|1
+四字熟語|一人で千人を相手にできるほど強いこと|一騎当千
+四字熟語|一つの行動で二つの利益を得ること|一石二鳥
+四字熟語|細かいところまで準備が行き届いていること|用意周到
+豆知識|タコの心臓はいくつある？|3つ,三つ,3,三
+人体|血液を全身に送り出す臓器は？|心臓
+人体|人体で最も大きい臓器は？|皮膚
+常識|日本で一番高い山は？|富士山
+地学|地震の揺れの大きさを表す日本の階級は？|震度
+地学|太陽系で最大の惑星は？|木星
+地学|地震そのものの規模を表す値は？|マグニチュード|1
+科学|水の化学式は？|H2O,エイチツーオー
+科学|元素記号Auの金属は？|金
+地理|世界で最も面積が大きい国は？|ロシア
+地理|日本で最も面積が大きい都道府県は？|北海道
+美術|「モナ・リザ」を描いた人物は？|レオナルド・ダ・ヴィンチ,ダ・ヴィンチ,ダヴィンチ
+アニメ|『ドラえもん』の大好物のおやつは？|どら焼き,どらやき
+漫画|『ONE PIECE』の主人公は？|モンキー・D・ルフィ,ルフィ
+アーティスト|「Lemon」を歌った人は誰でしょう？|米津玄師
+麻雀|他家の捨て牌で上がることを何という？|ロン
+YouTuber|「ブンブンハローYouTube」の挨拶で有名なYouTuberは？|ヒカキン
+食べ物|酢飯に魚の切り身をのせた日本の代表的な料理は？|寿司,すし
+ゲーム|マインクラフトの緑色で爆発するモンスターは？|クリーパー
+なぞなぞ|パンはパンでも食べられないパンは？|フライパン
+雑学|ペンギンの多くが生息するのはどの半球？|南半球
+連想|ひげがある/にゃーと鳴く/こたつで丸くなる/ネズミを追う/ペットの定番|猫,ねこ
+連想|白い/冷たい/冬に降る/だるまにできる/溶けると水|雪
+神話|ギリシャ神話の主神で雷を操る神は？|ゼウス`.split('\n').map(l=>{const p=l.split('|');const as=p[0]==='連想';return{c:p[0],t:as?'':p[1],h:as?p[1].split('/'):null,a:p[2].split(','),hard:p[3]==='1'}});
+const parseQ=t=>t.trim().split('\n').filter(l=>l.includes('|')).map(l=>{const p=l.split('|');const as=p[0]==='連想';return{c:p[0],t:as?'':p[1],h:as?p[1].split('/'):null,a:p[2].split(','),hard:p[3]==='1'}});
+const MEMO=['日本史','世界史','地学'];
+let room,uid,st={ph:'lobby',sc:{}},players={},isHost=false,deck=[],judged={},myName='',lastKey='',ac,bgmOn=false,bt,lid0='';
+
+const err=m=>{$('err').textContent=m||''};
+const lidOf=n=>{let h=5381;for(const c of n)h=((h*33)^c.charCodeAt(0))>>>0;return'L'+h.toString(36)};
+const norm=s=>String(s).normalize('NFKC').toLowerCase().replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-96)).replace(/[\s\u3000・･\-ー.,、。!！?？「」『』]/g,'').replace(/^(お|ご)(?=.{2,})/,'');
+const match=(g,a)=>{g=norm(g);a=norm(a);if(!g)return false;if(g===a)return true;const s=g.length<a.length?g:a,l=g.length<a.length?a:g;return s.length>=2&&l.includes(s)&&l.length-s.length<=1};
+const kanji=s=>(String(s).match(/[\u4e00-\u9fff]/g)||[]).length;
+const leaderOf=()=>{const ids=Object.keys(players);if(ids.length<2)return null;const v=ids.map(u=>[u,(st.sc||{})[u]||0]).sort((a,b)=>b[1]-a[1]);return v[0][1]-v[1][1]>=5?v[0][0]:null};
+const W=o=>{Object.assign(st,o);broadcast();return Promise.resolve()};
+
+let peer,conns={},conn;
+const rid=(l,p)=>{const t=l+'|'+p;let h=5381,g=7;for(const c of t){h=((h*33)^c.charCodeAt(0))>>>0;g=((g*31)+c.charCodeAt(0))>>>0}return'qzb-'+h.toString(36)+g.toString(36)};
+const pubPlayers=()=>{const o={};for(const k in players)o[k]={name:players[k].name};return o};
+function broadcast(){const m={t:'st',st,players:pubPlayers()};for(const k in conns)try{conns[k].send(m)}catch(e){}}
+function onHostData(id,m){
+ const p=players[id];if(!p)return;
+ if(m.t==='bz'){p.bz=Date.now();p.bq=m.bq}
+ else if(m.t==='ans'){p.ans=String(m.ans).slice(0,40);p.aq=m.aq;p.at=Date.now()}
+ hostCheck();
+}
+function entry(create){
+ err('');
+ myName=$('nm').value.trim();const ln=$('ln').value.trim(),pw=$('pw').value;
+ if(!myName||!ln||!pw)return err('名前・ロビー名・パスワードを入力してください');
+ const id=rid(ln,pw),dis=b=>{$('bCreate').disabled=$('bJoin').disabled=b};dis(true);
+ const fail=m=>{dis(false);err(m);try{peer&&peer.destroy()}catch(e){}};
+ const go=()=>{room=1;$('sEntry').hidden=true;$('lName').textContent=ln;render();setInterval(render,100)};
+ if(create){
+  peer=new Peer(id);
+  peer.on('error',e=>fail(e.type==='unavailable-id'?'そのロビー名とパスワードはすでに使われています':'接続エラー: '+e.type));
+  peer.on('open',()=>{
+   isHost=true;uid='host';players.host={name:myName,bz:0,bq:-1,aq:-1,at:0};st={ph:'lobby',sc:{}};
+   peer.on('connection',c=>{
+    c.on('data',m=>{
+     if(m.t==='hello'){
+      if(st.ph!=='lobby'||Object.keys(players).length>=4){c.send({t:'full',why:st.ph!=='lobby'?'すでにゲーム中です':'満員です（4人まで）'});setTimeout(()=>c.close(),400);return}
+      conns[c.peer]=c;players[c.peer]={name:String(m.n).slice(0,8),bz:0,bq:-1,aq:-1,at:0};broadcast();render();
+     }else onHostData(c.peer,m);
+    });
+    c.on('close',()=>{delete conns[c.peer];delete players[c.peer];broadcast();render()});
+   });
+   go();setInterval(tick,250);
+  });
+ }else{
+  peer=new Peer();
+  const nf='ロビーが見つかりません（名前とパスワードを確認）',to=setTimeout(()=>fail(nf),12000);
+  peer.on('error',e=>{clearTimeout(to);fail(e.type==='peer-unavailable'?nf:'接続エラー: '+e.type)});
+  peer.on('open',pid=>{
+   uid=pid;conn=peer.connect(id,{reliable:true});
+   conn.on('open',()=>conn.send({t:'hello',n:myName}));
+   conn.on('data',m=>{clearTimeout(to);
+    if(m.t==='full')return fail(m.why);
+    if(m.t==='st'){if($('sEntry').hidden===false)go();st=m.st;players=m.players;render()}});
+   conn.on('close',()=>{if(st.ph!=='end')err('ホストとの接続が切れました')});
+  });
+ }
+}
+$('bCreate').onclick=()=>entry(true);$('bJoin').onclick=()=>entry(false);
+
+/* ---------- host logic ---------- */
+async function genAI(onP){
+ let txt='';
+ try{
+  const sample=await claude.use('sample');if(!sample)return[];
+  const p='日本の高校生向け早押しクイズを日本語で40問作り、JSON配列のみ出力。範囲:日本史,世界史,四字熟語,豆知識,人体,常識,地学,科学,地理,美術,アニメ,漫画,アーティスト名(〇〇の歌を出した人は?),麻雀,YouTuber,有名な食べ物,話題のスポット,最近のニュース,神話,ゲーム,なぞなぞ,雑学。形式{"c":カテゴリ,"t":問題文,"a":[正解と表記ゆれ],"hard":日本史/世界史/地学の難問ならtrue}。さらに連想クイズを4問含め、形式{"c":"連想","h":[ヒント5個(段々分かりやすく)],"a":[正解]}。問題文に答えを含めない。事実の誤りは厳禁。';
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),40000);
+  try{await sample(p,{signal:ctl.signal,cache:false,onText:({text})=>{txt=text;onP((text.match(/"a"\s*:/g)||[]).length)}})}catch(e){txt=(e&&e.text)||txt}
+  clearTimeout(to);
+  const r=[];for(const s of(txt.match(/\{[^{}]*\}/g)||[])){try{r.push(JSON.parse(s))}catch(e){}}
+  return r.filter(x=>x&&x.a&&x.a.length&&(x.t||(x.h&&x.h.length>1))).map(x=>({c:x.c||'雑学',t:x.t||'',h:x.h||null,a:[].concat(x.a).map(String),hard:!!x.hard}));
+ }catch(e){return[]}
+}
+function build(ai){
+ const seen=new Set(),pool=[...ai,...BANK,...parseQ(window.QTEXT||'')].filter(q=>{const k=q.t||q.h.join();if(seen.has(k))return false;seen.add(k);return true});
+ pool.sort(()=>Math.random()-.5);
+ const pick=[],rest=[];
+ for(const q of pool){const memo=MEMO.includes(q.c);if(memo&&q.hard&&Math.random()>.2)rest.push(q);else if(pick.length<30)pick.push(q);else rest.push(q)}
+ while(pick.length<30&&rest.length)pick.push(rest.shift());
+ return pick.sort(()=>Math.random()-.5);
+}
+$('bStart').onclick=async()=>{
+ if(!isHost)return;$('bStart').disabled=true;
+ deck=build([]);
+ const sc={};Object.keys(players).forEach(u=>sc[u]=0);
+ W({ph:'rules',sc,qi:-1,nx:Date.now()+14000,msg:''});
+};
+function nextQ(){
+ const qi=st.qi+1;if(qi>=Math.min(30,deck.length))return W({ph:'end'});
+ const q=deck[qi],as=!!q.h,now=Date.now();
+ const at=(kanji(q.a[0])>=3||kanji(q.t)>=q.t.length*.6&&q.t.length>0)?15:10;
+ W({ph:'q',qi,q:{c:q.c,t:q.t,h:q.h,at,pt:qi===29?3:1,as},s0:now,t0:now,rs:now,dl:now+(as?50000:30000),ls:[],by:null,msg:''});
+}
+function reveal(msg){W({ph:'rev',rv:deck[st.qi].a[0],msg,nx:Date.now()+4500})}
+function hostCheck(){
+ const now=Date.now();
+ if(st.ph==='q'){
+  const lead=leaderOf();
+  const c=Object.entries(players).filter(([u,p])=>p.bq===st.qi&&p.bz>=st.rs&&!(st.ls||[]).includes(u)&&!(u===lead&&p.bz<st.s0+3000)).sort((a,b)=>a[1].bz-b[1].bz)[0];
+  if(c)W({ph:'ans',by:c[0],pa:now,fz:now-st.t0,ae:now+st.q.at*1000,msg:''});
+ }else if(st.ph==='ans'){
+  const p=players[st.by];
+  if(p&&p.aq===st.qi&&p.at&&!judged[st.by+'_'+p.at]){
+   judged[st.by+'_'+p.at]=1;
+   const ok=deck[st.qi].a.some(a=>match(p.ans||'',a));
+   if(ok){const sc={...st.sc};sc[st.by]=(sc[st.by]||0)+st.q.pt;W({sc,ph:'rev',rv:deck[st.qi].a[0],msg:'⭕ '+p.name+' 正解！ +'+st.q.pt,nx:now+4500})}
+   else wrong(p.name+' 不正解…');
+  }
+ }
+}
+function wrong(m){
+ const now=Date.now(),ls=[...(st.ls||[]),st.by];
+ if(ls.length>=Object.keys(players).length)return W({ls,ph:'rev',rv:deck[st.qi].a[0],msg:m+'（全員不正解）',nx:now+4500});
+ W({ls,ph:'q',by:null,rs:now,t0:st.q.as?st.t0:now,dl:st.dl+5000+(now-st.pa),msg:m+' 制限時間+5秒'});
+}
+function tick(){
+ const now=Date.now();
+ if(st.ph==='rules'&&now>=st.nx)nextQ();
+ else if(st.ph==='q'&&now>=st.dl)reveal('⏱ 時間切れ');
+ else if(st.ph==='ans'&&now>=st.ae)wrong((players[st.by]||{}).name+' 時間切れ');
+ else if(st.ph==='rev'&&now>=st.nx)nextQ();
+}
+
+/* ---------- client ---------- */
+$('buzz').onclick=buzz;
+function buzz(){
+ if(st.ph!=='q'||(st.ls||[]).includes(uid))return;
+ if(leaderOf()===uid&&Date.now()<st.s0+3000)return;
+ isHost?onHostData('host',{t:'bz',bq:st.qi}):conn&&conn.send({t:'bz',bq:st.qi});
+}
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&document.activeElement!==$('ansIn')){e.preventDefault();buzz()}});
+function sendAns(){
+ const v=$('ansIn').value.trim();if(!v||st.ph!=='ans'||st.by!==uid)return;
+ isHost?onHostData('host',{t:'ans',ans:v,aq:st.qi}):conn&&conn.send({t:'ans',ans:v,aq:st.qi});
+ $('ansIn').value='';
+}
+$('bAns').onclick=sendAns;
+$('ansIn').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){e.preventDefault();sendAns()}});
+
+function show(id){['sLobby','sRules','sGame','sEnd'].forEach(x=>$(x).hidden=x!==id)}
+function board(){
+ const lead=leaderOf();
+ return Object.entries(players).sort((a,b)=>((st.sc||{})[b[0]]||0)-((st.sc||{})[a[0]]||0)).map(([u,p])=>{
+  const d=document.createElement('div');d.className='pl'+(u===uid?' me':'')+(u===lead?' lead':'');
+  const a=document.createElement('span'),b=document.createElement('span');
+  a.textContent=p.name+(u===uid?'（あなた）':'')+((st.ls||[]).includes(u)&&st.ph==='q'?' ✖':'');b.textContent=((st.sc||{})[u]||0)+'点';d.append(a,b);return d.outerHTML}).join('');
+}
+function render(){
+ if(!room||$('sEntry').hidden===false)return;
+ const now=Date.now(),ph=st.ph;
+ if(ph==='lobby'||ph==='gen'){
+  show('sLobby');
+  const gn=ph==='gen';$('gen').hidden=!gn;
+  if(gn){const g=Math.min(44,st.gp||0);$('gBar').style.width=Math.round(g/44*100)+'%';$('gTx').textContent='AIが問題を作成中… '+g+' / 約44問（最大40秒）'}
+  $('lList').innerHTML=Object.entries(players).map(([u,p])=>'<div class="pl"><span></span></div>').join('');
+  [...$('lList').querySelectorAll('span')].forEach((s,i)=>s.textContent=Object.values(players)[i].name);
+  $('bStart').hidden=!isHost||gn;
+  $('lMsg').textContent=gn?'':isHost?'全員そろったら開始してください':'ホストの開始を待っています…';
+ }else if(ph==='rules'){
+  show('sRules');$('rMsg').textContent=Math.max(0,Math.ceil((st.nx-now)/1000))+'秒後に開始します';
+ }else if(ph==='end'){
+  show('sEnd');
+  const v=Object.entries(players).sort((a,b)=>((st.sc||{})[b[0]]||0)-((st.sc||{})[a[0]]||0));
+  const top=(st.sc||{})[v[0][0]]||0;
+  $('rank').innerHTML=v.map(([u,p],i)=>{const d=document.createElement('div');d.className='pl';d.textContent=(((st.sc||{})[u]||0)===top?'🥇 ':(i+1)+'位 ')+p.name+'：'+((st.sc||{})[u]||0)+'点';return d.outerHTML}).join('');
+ }else{
+  show('sGame');
+  const q=st.q||{},el=ph==='ans'?st.fz:now-st.t0;
+  $('qHead').textContent='第'+(st.qi+1)+'問 / 30　['+q.c+']'+(q.pt===3?' 🔥3点問題':'');
+  $('timer').textContent=Math.max(0,Math.ceil(((ph==='ans'?st.ae:st.dl)-now)/1000));
+  let t='';
+  if(q.as){const n=ph==='rev'?q.h.length:Math.min(q.h.length,1+Math.floor(el/10000));t='【連想クイズ】\n'+q.h.slice(0,n).map((h,i)=>(i+1)+'. '+h).join('\n')}
+  else t=ph==='rev'?q.t:q.t.slice(0,Math.floor(el/1000*5));
+  $('qText').style.whiteSpace='pre-wrap';$('qText').textContent=t;
+  let s=st.msg||'';
+  if(ph==='ans')s=(players[st.by]||{}).name+' が回答中…（'+q.at+'秒）';
+  if(ph==='rev')s=(st.msg||'')+'　正解：'+st.rv;
+  $('status').textContent=s;
+  const locked=(st.ls||[]).includes(uid),lead=leaderOf()===uid&&now<st.s0+3000;
+  const b=$('buzz');b.disabled=ph!=='q'||locked||lead;
+  b.textContent=locked&&ph==='q'?'この問題は回答不可':lead?'🔒 ロック中（トップ制限 '+Math.ceil((st.s0+3000-now)/1000)+'秒）':'早押し！（スペースキー）';
+  const mine=ph==='ans'&&st.by===uid;
+  if(mine!==!$('ansBox').hidden){$('ansBox').hidden=!mine;if(mine){$('ansIn').value='';setTimeout(()=>$('ansIn').focus(),30)}}
+  const bd=board();if(bd!==lastKey){$('board').innerHTML=bd;lastKey=bd}
+ }
+}
+$('bgmBtn').onclick=()=>{
+ if(bgmOn){clearInterval(bt);bgmOn=false;return}
+ ac=ac||new AudioContext();bgmOn=true;const sc=[0,2,4,7,9,12,9,7,4,2,0,4,7,4],mel=[0,3,5,7,10,12];let i=0;
+ bt=setInterval(()=>{const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=261.6*2**(sc[i++%sc.length]/12);
+ g.gain.setValueAtTime(.05,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.35);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.4)},260);
+};
+</script>
+</body>
+</html>
